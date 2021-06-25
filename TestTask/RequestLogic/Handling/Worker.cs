@@ -48,7 +48,7 @@ namespace TestTask.RequestLogic.Handling
 
         private void Client_BytesReceived(object sender, BytesReceivedEventArgs e)
         {
-            var numbers = e.ReceivedBytes.Where(@byte => @byte >= '0' && @byte <= '9');
+            var numbers = e.ReceivedBytes.Where(_ => _ >= '0' && _ <= '9');
             _requestPool.UpdateResponse(e.RequestId, numbers);
         }
 
