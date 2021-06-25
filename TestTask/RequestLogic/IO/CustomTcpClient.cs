@@ -4,20 +4,20 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using TestTask.EventArguments;
+using TestTask.Data.EventArguments;
 
-namespace TestTask
+namespace TestTask.RequestLogic.IO
 {
     /// <summary>
     ///     Custom implementation of a TCP-client based on working with asynchronous sockets.
     /// </summary>
     public class CustomTcpClient
     {
-        private readonly int _request;
+        private readonly int _requestId;
 
-        public CustomTcpClient(int request)
+        public CustomTcpClient(int requestId)
         {
-            _request = request;
+            _requestId = requestId;
         }
 
         public void StartClient()
@@ -34,14 +34,14 @@ namespace TestTask
             {
                 socket.BeginConnect(endpoint, ConnectCallback, socket);
                 _connectDone.WaitOne();
-                Send(socket, $"{_request}\n");
+                Send(socket, $"{_requestId}\n");
                 _sendDone.WaitOne();
                 Receive(socket);
                 _receiveDone.WaitOne();
             }
             catch (Exception e)
             {
-                OnErrorReceived(new ErrorEventArgs(_request, e));
+                OnErrorReceived(new ErrorEventArgs(_requestId, e));
             }
         }
 
@@ -55,7 +55,7 @@ namespace TestTask
             }
             catch (Exception e)
             {
-                OnErrorReceived(new ErrorEventArgs(_request, e));
+                OnErrorReceived(new ErrorEventArgs(_requestId, e));
             }
         }
 
@@ -68,7 +68,7 @@ namespace TestTask
             }
             catch (Exception e)
             {
-                OnErrorReceived(new ErrorEventArgs(_request, e));
+                OnErrorReceived(new ErrorEventArgs(_requestId, e));
             }
         }
 
@@ -82,10 +82,10 @@ namespace TestTask
                 if (bytesRead > 0)
                 {
                     var actuallyReceivedBytes = state.Buffer.Take(bytesRead).ToArray();
-                    OnBytesReceived(new BytesReceivedEventArgs(_request, actuallyReceivedBytes));
+                    OnBytesReceived(new BytesReceivedEventArgs(_requestId, actuallyReceivedBytes));
                     if (actuallyReceivedBytes[bytesRead - 1] == '\r')
                     {
-                        OnResponseReceived(new CommonEventArgs(_request));
+                        OnResponseReceived(new CommonEventArgs(_requestId));
                         _receiveDone.Set();
                     }
                     else
@@ -100,7 +100,7 @@ namespace TestTask
             }
             catch (Exception e)
             {
-                OnErrorReceived(new ErrorEventArgs(_request, e));
+                OnErrorReceived(new ErrorEventArgs(_requestId, e));
             }
         }
 
@@ -120,7 +120,7 @@ namespace TestTask
             }
             catch (Exception e)
             {
-                OnErrorReceived(new ErrorEventArgs(_request, e));
+                OnErrorReceived(new ErrorEventArgs(_requestId, e));
             }
         }
 

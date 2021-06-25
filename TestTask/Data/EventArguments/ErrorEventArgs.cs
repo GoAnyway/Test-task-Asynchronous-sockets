@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace TestTask.EventArguments
+namespace TestTask.Data.EventArguments
 {
     /// <summary>
     ///     Arguments of the event that is called
@@ -8,10 +8,10 @@ namespace TestTask.EventArguments
     /// </summary>
     public class ErrorEventArgs : CommonEventArgs
     {
-        public ErrorEventArgs(int request, Exception e) : base(request)
+        public ErrorEventArgs(int requestId, Exception e) : base(requestId)
         {
             Exception = e;
-            Request = request;
+            RequestId = requestId;
         }
 
         public Exception Exception { get; }

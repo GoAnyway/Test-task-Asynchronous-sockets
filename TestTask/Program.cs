@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Text;
-using TestTask.EventArguments;
+using TestTask.Data.EventArguments;
 
 namespace TestTask
 {

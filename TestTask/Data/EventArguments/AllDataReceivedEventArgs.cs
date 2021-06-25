@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace TestTask.EventArguments
+namespace TestTask.Data.EventArguments
 {
     /// <summary>
     ///     Arguments of the event that is called when all data has been received from the server.

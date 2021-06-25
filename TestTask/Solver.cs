@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using TestTask.EventArguments;
+using TestTask.Data.EventArguments;
+using TestTask.RequestLogic.Handling;
+using DataReceivedEventArgs = TestTask.Data.EventArguments.DataReceivedEventArgs;
 
 namespace TestTask
 {
@@ -22,20 +22,26 @@ namespace TestTask
         /// <summary>
         ///     Server response store.
         /// </summary>
-        private readonly Dictionary<int, List<byte>> _responses = new();
+        private readonly Dictionary<int, int> _responses = new();
 
         /// <summary>
-        ///     Number of <see cref="CustomTcpClient" /> running simultaneously.
+        ///     Number of <see cref="Worker" /> running simultaneously.
         ///     <para> Recommended Max Amount: 100. </para>
         /// </summary>
-        private readonly SemaphoreSlim _semaphore = new(100);
-
-        private readonly Stopwatch _stopwatch = new();
+        private const int MaxWorkersCount = 64;
 
         /// <summary>
         ///     Number of responses received from the server.
         /// </summary>
         private int _done;
+
+        private readonly Stopwatch _stopwatch = new();
+
+        public Solver()
+        {
+            // We need to do this to avoid using ConcurrentDictionary or locks.
+            for (var idx = 1; idx <= N; idx++) _responses[idx] = 0;
+        }
 
         /// <summary>
         ///     Event called when all responses from the server have been received.
@@ -45,76 +51,32 @@ namespace TestTask
         public void Start()
         {
             _stopwatch.Start();
-            InitResponses();
-            InitRequests();
+            var requestPool = new RequestPool(N);
+            requestPool.DataReceived += DataReceived;
 
             while (true)
             {
                 if (Interlocked.CompareExchange(ref _done, N, N) == N)
                 {
-                    var values = _responses.Values.Select(_ =>
-                        int.Parse(Encoding.GetEncoding("koi8-r").GetString(_.ToArray())));
-                    OnAllDataReceived(new AllDataReceivedEventArgs(values));
-
+                    OnAllDataReceived(new AllDataReceivedEventArgs(_responses.Values));
                     return;
                 }
 
-                Thread.Sleep(50);
+                if (Worker.CurrentWorkersCount != MaxWorkersCount)
+                {
+                    Task.Run(() => new Worker(requestPool).StartWork());
+                }
+
+                Thread.Sleep(1);
             }
         }
 
-        private void InitRequests()
-        {
-            Task.Run(() =>
-            {
-                Parallel.For(1, N + 1, request =>
-                {
-                    _semaphore.Wait();
-                    RequestServerValue(request);
-                });
-            });
-        }
-
-        private void InitResponses()
-        {
-            // We need to do this to avoid using ConcurrentDictionary or locks.
-            for (var idx = 1; idx <= N; idx++) _responses[idx] = new List<byte>();
-        }
-
-        private void RequestServerValue(int request)
-        {
-            var client = new CustomTcpClient(request);
-            client.BytesReceived += Client_BytesReceived;
-            client.ErrorReceived += Client_ErrorReceived;
-            client.ResponseReceived += Client_ResponseReceived;
-            client.StartClient();
-        }
-
-        private void Client_ResponseReceived(object sender, CommonEventArgs e)
+        private void DataReceived(object sender, DataReceivedEventArgs e)
         {
             Interlocked.Increment(ref _done);
-            var response = Encoding.GetEncoding("koi8-r").GetString(_responses[e.Request].ToArray());
-
+            _responses[e.RequestId] = e.Data;
             Console.WriteLine(
-                $"{_stopwatch.Elapsed} Task #{e.Request} completed, response: {response}, done: {_done}/{N}");
-            _semaphore.Release();
-        }
-
-        private void Client_ErrorReceived(object sender, ErrorEventArgs e)
-        {
-            Console.WriteLine($"{_stopwatch.Elapsed} Re-firing task #{e.Request}");
-            _responses[e.Request] = new List<byte>();
-
-            RequestServerValue(e.Request);
-        }
-
-        private void Client_BytesReceived(object sender, BytesReceivedEventArgs e)
-        {
-            foreach (var @byte in e.ReceivedBytes)
-            {
-                if (@byte < '0' || @byte > '9') continue;
-                _responses[e.Request].Add(@byte);
-            }
+                $"{_stopwatch.Elapsed} Request #{e.RequestId} completed, response: {e.Data}, done: {_done}/{N}");
         }
 
         protected virtual void OnAllDataReceived(AllDataReceivedEventArgs e) => AllDataReceived?.Invoke(this, e);

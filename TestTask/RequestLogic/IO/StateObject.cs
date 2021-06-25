@@ -1,6 +1,6 @@
 ﻿using System.Net.Sockets;
 
-namespace TestTask
+namespace TestTask.RequestLogic.IO
 {
     /// <summary>
     ///     The state object of communication with the server via <see cref="Socket" />.
