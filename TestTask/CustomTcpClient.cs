@@ -9,7 +9,7 @@ using TestTask.EventArguments;
 namespace TestTask
 {
     /// <summary>
-    ///     Custom implementation of a tcp-client based on working with asynchronous sockets.
+    ///     Custom implementation of a TCP-client based on working with asynchronous sockets.
     /// </summary>
     public class CustomTcpClient
     {
@@ -24,7 +24,7 @@ namespace TestTask
         {
             var ip = IPAddress.Parse(Host);
             var endpoint = new IPEndPoint(ip, Port);
-            using var client = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
+            using var socket = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
             {
                 ReceiveTimeout = 500,
                 SendTimeout = 500
@@ -32,30 +32,25 @@ namespace TestTask
 
             try
             {
-                client.BeginConnect(endpoint, ConnectCallback, client);
+                socket.BeginConnect(endpoint, ConnectCallback, socket);
                 _connectDone.WaitOne();
-                Send(client, $"{_request}\n");
+                Send(socket, $"{_request}\n");
                 _sendDone.WaitOne();
-                Receive(client);
+                Receive(socket);
                 _receiveDone.WaitOne();
             }
             catch (Exception e)
             {
                 OnErrorReceived(new ErrorEventArgs(_request, e));
             }
-            finally
-            {
-                client.Shutdown(SocketShutdown.Both);
-                client.Close();
-            }
         }
 
-        private void ConnectCallback(IAsyncResult ar)
+        private void ConnectCallback(IAsyncResult result)
         {
             try
             {
-                var client = (Socket) ar.AsyncState;
-                client?.EndConnect(ar);
+                var socket = (Socket) result.AsyncState;
+                socket?.EndConnect(result);
                 _connectDone.Set();
             }
             catch (Exception e)
@@ -77,25 +72,25 @@ namespace TestTask
             }
         }
 
-        private void ReceiveCallback(IAsyncResult ar)
+        private void ReceiveCallback(IAsyncResult result)
         {
-            var state = (StateObject) ar.AsyncState;
+            var state = (StateObject) result.AsyncState;
             try
             {
-                var client = state.WorkSocket;
-                var bytesRead = client.EndReceive(ar);
+                var socket = state.WorkSocket;
+                var bytesRead = socket.EndReceive(result);
                 if (bytesRead > 0)
                 {
-                    var actuallyReceivedBytes = state.Buffer.AsSpan(0, bytesRead).ToArray();
-                    OnByteReceived(new BytesReceivedEventArgs(_request, actuallyReceivedBytes));
-                    if (actuallyReceivedBytes.Any(_ => _ == 13))
+                    var actuallyReceivedBytes = state.Buffer.Take(bytesRead).ToArray();
+                    OnBytesReceived(new BytesReceivedEventArgs(_request, actuallyReceivedBytes));
+                    if (actuallyReceivedBytes[bytesRead - 1] == '\r')
                     {
                         OnResponseReceived(new CommonEventArgs(_request));
                         _receiveDone.Set();
                     }
                     else
                     {
-                        client.BeginReceive(state.Buffer, 0, StateObject.BufferSize, 0, ReceiveCallback, state);
+                        socket.BeginReceive(state.Buffer, 0, StateObject.BufferSize, 0, ReceiveCallback, state);
                     }
                 }
                 else
@@ -109,18 +104,18 @@ namespace TestTask
             }
         }
 
-        private void Send(Socket client, string data)
+        private void Send(Socket socket, string data)
         {
             var byteData = Encoding.GetEncoding("koi8-r").GetBytes(data);
-            client.BeginSend(byteData, 0, byteData.Length, 0, SendCallback, client);
+            socket.BeginSend(byteData, 0, byteData.Length, SocketFlags.None, SendCallback, socket);
         }
 
-        private void SendCallback(IAsyncResult ar)
+        private void SendCallback(IAsyncResult result)
         {
             try
             {
-                var client = (Socket) ar.AsyncState;
-                client.EndSend(ar);
+                var socket = (Socket) result.AsyncState;
+                socket.EndSend(result);
                 _sendDone.Set();
             }
             catch (Exception e)
@@ -129,7 +124,7 @@ namespace TestTask
             }
         }
 
-        protected virtual void OnByteReceived(BytesReceivedEventArgs e) => BytesReceived?.Invoke(this, e);
+        protected virtual void OnBytesReceived(BytesReceivedEventArgs e) => BytesReceived?.Invoke(this, e);
 
         protected virtual void OnErrorReceived(ErrorEventArgs e) => ErrorReceived?.Invoke(this, e);
 
@@ -145,9 +140,9 @@ namespace TestTask
 
         #region Thread synchronization events
 
-        private readonly ManualResetEvent _connectDone = new ManualResetEvent(false);
-        private readonly ManualResetEvent _sendDone = new ManualResetEvent(false);
-        private readonly ManualResetEvent _receiveDone = new ManualResetEvent(false);
+        private readonly ManualResetEvent _connectDone = new(false);
+        private readonly ManualResetEvent _sendDone = new(false);
+        private readonly ManualResetEvent _receiveDone = new(false);
 
         #endregion
 
