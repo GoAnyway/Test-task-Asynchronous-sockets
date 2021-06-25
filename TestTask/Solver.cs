@@ -62,7 +62,7 @@ namespace TestTask
                     return;
                 }
 
-                if (Worker.CurrentWorkersCount != MaxWorkersCount)
+                if (Worker.ActiveWorkersCount != MaxWorkersCount)
                 {
                     Task.Run(() => new Worker(requestPool).StartWork());
                 }
